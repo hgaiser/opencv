@@ -94,6 +94,7 @@ static std::string bytesToStringRepr(size_t value)
 void dumpOpenCLDevice()
 {
     using namespace cv::ocl;
+
     try
     {
         std::vector<PlatformInfo> platforms;
@@ -165,6 +166,33 @@ void dumpOpenCLDevice()
         const char* isUnifiedMemoryStr = device.hostUnifiedMemory() ? "Yes" : "No";
         DUMP_MESSAGE_STDOUT("    Host unified memory = "<< isUnifiedMemoryStr);
         DUMP_PROPERTY_XML("cv_ocl_current_hostUnifiedMemory", device.hostUnifiedMemory());
+
+        const char* haveAmdBlasStr = haveAmdBlas() ? "Yes" : "No";
+        DUMP_MESSAGE_STDOUT("    Has AMD Blas = "<< haveAmdBlasStr);
+        DUMP_PROPERTY_XML("cv_ocl_current_AmdBlas", haveAmdBlas());
+
+        const char* haveAmdFftStr = haveAmdFft() ? "Yes" : "No";
+        DUMP_MESSAGE_STDOUT("    Has AMD Fft = "<< haveAmdFftStr);
+        DUMP_PROPERTY_XML("cv_ocl_current_AmdFft", haveAmdFft());
+
+
+        DUMP_MESSAGE_STDOUT("    Preferred vector width char = "<< device.preferredVectorWidthChar());
+        DUMP_PROPERTY_XML("cv_ocl_current_preferredVectorWidthChar", device.preferredVectorWidthChar());
+
+        DUMP_MESSAGE_STDOUT("    Preferred vector width short = "<< device.preferredVectorWidthShort());
+        DUMP_PROPERTY_XML("cv_ocl_current_preferredVectorWidthShort", device.preferredVectorWidthShort());
+
+        DUMP_MESSAGE_STDOUT("    Preferred vector width int = "<< device.preferredVectorWidthInt());
+        DUMP_PROPERTY_XML("cv_ocl_current_preferredVectorWidthInt", device.preferredVectorWidthInt());
+
+        DUMP_MESSAGE_STDOUT("    Preferred vector width long = "<< device.preferredVectorWidthLong());
+        DUMP_PROPERTY_XML("cv_ocl_current_preferredVectorWidthLong", device.preferredVectorWidthLong());
+
+        DUMP_MESSAGE_STDOUT("    Preferred vector width float = "<< device.preferredVectorWidthFloat());
+        DUMP_PROPERTY_XML("cv_ocl_current_preferredVectorWidthFloat", device.preferredVectorWidthFloat());
+
+        DUMP_MESSAGE_STDOUT("    Preferred vector width double = "<< device.preferredVectorWidthDouble());
+        DUMP_PROPERTY_XML("cv_ocl_current_preferredVectorWidthDouble", device.preferredVectorWidthDouble());
     }
     catch (...)
     {
@@ -195,14 +223,14 @@ Mat TestUtils::readImageType(const String &fname, int type)
     return src;
 }
 
-double TestUtils::checkNorm(InputArray m)
+double TestUtils::checkNorm1(InputArray m, InputArray mask)
 {
-    return norm(m.getMat(), NORM_INF);
+    return cvtest::norm(m.getMat(), NORM_INF, mask.getMat());
 }
 
-double TestUtils::checkNorm(InputArray m1, InputArray m2)
+double TestUtils::checkNorm2(InputArray m1, InputArray m2, InputArray mask)
 {
-    return norm(m1.getMat(), m2.getMat(), NORM_INF);
+    return cvtest::norm(m1.getMat(), m2.getMat(), NORM_INF, mask.getMat());
 }
 
 double TestUtils::checkSimilarity(InputArray m1, InputArray m2)
