@@ -442,27 +442,23 @@ String format( const char* fmt, ... )
 
 String tempfile( const char* suffix )
 {
-#ifdef HAVE_WINRT
-    std::wstring temp_dir = L"";
-    const wchar_t* opencv_temp_dir = _wgetenv(L"OPENCV_TEMP_PATH");
-    if (opencv_temp_dir)
-        temp_dir = std::wstring(opencv_temp_dir);
-#else
-    const char *temp_dir = getenv("OPENCV_TEMP_PATH");
     String fname;
+#ifndef HAVE_WINRT
+    const char *temp_dir = getenv("OPENCV_TEMP_PATH");
 #endif
 
 #if defined WIN32 || defined _WIN32
 #ifdef HAVE_WINRT
     RoInitialize(RO_INIT_MULTITHREADED);
-    std::wstring temp_dir2;
-    if (temp_dir.empty())
-        temp_dir = GetTempPathWinRT();
+    std::wstring temp_dir = L"";
+    const wchar_t* opencv_temp_dir = GetTempPathWinRT().c_str();
+    if (opencv_temp_dir)
+        temp_dir = std::wstring(opencv_temp_dir);
 
     std::wstring temp_file;
     temp_file = GetTempFileNameWinRT(L"ocv");
     if (temp_file.empty())
-        return std::string();
+        return String();
 
     temp_file = temp_dir + std::wstring(L"\\") + temp_file;
     DeleteFileW(temp_file.c_str());
@@ -470,7 +466,7 @@ String tempfile( const char* suffix )
     char aname[MAX_PATH];
     size_t copied = wcstombs(aname, temp_file.c_str(), MAX_PATH);
     CV_Assert((copied != MAX_PATH) && (copied != (size_t)-1));
-    fname = std::string(aname);
+    fname = String(aname);
     RoUninitialize();
 #else
     char temp_dir2[MAX_PATH] = { 0 };
@@ -1063,6 +1059,51 @@ TLSStorage::~TLSStorage()
 
 TLSData<CoreTLSData> coreTlsData;
 
+#ifdef CV_COLLECT_IMPL_DATA
+void setImpl(int flags)
+{
+    CoreTLSData* data = coreTlsData.get();
+    data->implFlags = flags;
+    data->implCode.clear();
+    data->implFun.clear();
+}
+
+void addImpl(int flag, const char* func)
+{
+    CoreTLSData* data = coreTlsData.get();
+    data->implFlags |= flag;
+    if(func) // use lazy collection if name was not specified
+    {
+        size_t index = data->implCode.size();
+        if(!index || (data->implCode[index-1] != flag || data->implFun[index-1].compare(func))) // avoid duplicates
+        {
+            data->implCode.push_back(flag);
+            data->implFun.push_back(func);
+        }
+    }
+}
+
+int getImpl(std::vector<int> &impl, std::vector<String> &funName)
+{
+    CoreTLSData* data = coreTlsData.get();
+    impl = data->implCode;
+    funName = data->implFun;
+    return data->implFlags; // return actual flags for lazy collection
+}
+
+bool useCollection()
+{
+    CoreTLSData* data = coreTlsData.get();
+    return data->useCollection;
+}
+
+void setUseCollection(bool flag)
+{
+    CoreTLSData* data = coreTlsData.get();
+    data->useCollection = flag;
+}
+#endif
+
 namespace ipp
 {
 
@@ -1086,6 +1127,35 @@ int getIppStatus()
 String getIppErrorLocation()
 {
     return format("%s:%d %s", filename ? filename : "", linen, funcname ? funcname : "");
+}
+
+bool useIPP()
+{
+#ifdef HAVE_IPP
+    CoreTLSData* data = coreTlsData.get();
+    if(data->useIPP < 0)
+    {
+        const char* pIppEnv = getenv("OPENCV_IPP");
+        if(pIppEnv && (cv::String(pIppEnv) == "disabled"))
+            data->useIPP = false;
+        else
+            data->useIPP = true;
+    }
+    return (data->useIPP > 0);
+#else
+    return false;
+#endif
+}
+
+void setUseIPP(bool flag)
+{
+    CoreTLSData* data = coreTlsData.get();
+#ifdef HAVE_IPP
+    data->useIPP = flag;
+#else
+    (void)flag;
+    data->useIPP = false;
+#endif
 }
 
 } // namespace ipp
