@@ -41,7 +41,7 @@
 //M*/
 
 #include "precomp.hpp"
-#include "opencl_kernels.hpp"
+#include "opencl_kernels_stitching.hpp"
 
 namespace cv {
 namespace detail {
@@ -87,6 +87,11 @@ Point2f PlaneWarper::warpPoint(const Point2f &pt, InputArray K, InputArray R, In
     return uv;
 }
 
+Rect PlaneWarper::buildMaps(Size src_size, InputArray K, InputArray R, OutputArray xmap, OutputArray ymap)
+{
+    return buildMaps(src_size, K, R, Mat::zeros(3, 1, CV_32FC1), xmap, ymap);
+}
+
 Rect PlaneWarper::buildMaps(Size src_size, InputArray K, InputArray R, InputArray T, OutputArray _xmap, OutputArray _ymap)
 {
     projector_.setCameraParams(K, R, T);
@@ -103,18 +108,21 @@ Rect PlaneWarper::buildMaps(Size src_size, InputArray K, InputArray R, InputArra
         ocl::Kernel k("buildWarpPlaneMaps", ocl::stitching::warpers_oclsrc);
         if (!k.empty())
         {
-
+            int rowsPerWI = ocl::Device::getDefault().isIntel() ? 4 : 1;
             Mat k_rinv(1, 9, CV_32FC1, projector_.k_rinv), t(1, 3, CV_32FC1, projector_.t);
             UMat uxmap = _xmap.getUMat(), uymap = _ymap.getUMat(),
                     uk_rinv = k_rinv.getUMat(ACCESS_READ), ut = t.getUMat(ACCESS_READ);
 
             k.args(ocl::KernelArg::WriteOnlyNoSize(uxmap), ocl::KernelArg::WriteOnly(uymap),
                    ocl::KernelArg::PtrReadOnly(uk_rinv), ocl::KernelArg::PtrReadOnly(ut),
-                   dst_tl.x, dst_tl.y, projector_.scale);
+                   dst_tl.x, dst_tl.y, 1/projector_.scale, rowsPerWI);
 
-            size_t globalsize[2] = { dsize.width, dsize.height };
+            size_t globalsize[2] = { dsize.width, (dsize.height + rowsPerWI - 1) / rowsPerWI };
             if (k.run(2, globalsize, NULL, true))
+            {
+                CV_IMPL_ADD(CV_IMPL_OCL);
                 return Rect(dst_tl, dst_br);
+            }
         }
     }
 
@@ -371,6 +379,7 @@ Rect SphericalWarper::buildMaps(Size src_size, InputArray K, InputArray R, Outpu
         ocl::Kernel k("buildWarpSphericalMaps", ocl::stitching::warpers_oclsrc);
         if (!k.empty())
         {
+            int rowsPerWI = ocl::Device::getDefault().isIntel() ? 4 : 1;
             projector_.setCameraParams(K, R);
 
             Point dst_tl, dst_br;
@@ -384,11 +393,14 @@ Rect SphericalWarper::buildMaps(Size src_size, InputArray K, InputArray R, Outpu
             UMat uxmap = xmap.getUMat(), uymap = ymap.getUMat(), uk_rinv = k_rinv.getUMat(ACCESS_READ);
 
             k.args(ocl::KernelArg::WriteOnlyNoSize(uxmap), ocl::KernelArg::WriteOnly(uymap),
-                   ocl::KernelArg::PtrReadOnly(uk_rinv), dst_tl.x, dst_tl.y, projector_.scale);
+                   ocl::KernelArg::PtrReadOnly(uk_rinv), dst_tl.x, dst_tl.y, 1/projector_.scale, rowsPerWI);
 
-            size_t globalsize[2] = { dsize.width, dsize.height };
+            size_t globalsize[2] = { dsize.width, (dsize.height + rowsPerWI - 1) / rowsPerWI };
             if (k.run(2, globalsize, NULL, true))
+            {
+                CV_IMPL_ADD(CV_IMPL_OCL);
                 return Rect(dst_tl, dst_br);
+            }
         }
     }
 
@@ -415,6 +427,7 @@ Rect CylindricalWarper::buildMaps(Size src_size, InputArray K, InputArray R, Out
         ocl::Kernel k("buildWarpCylindricalMaps", ocl::stitching::warpers_oclsrc);
         if (!k.empty())
         {
+            int rowsPerWI = ocl::Device::getDefault().isIntel() ? 4 : 1;
             projector_.setCameraParams(K, R);
 
             Point dst_tl, dst_br;
@@ -428,11 +441,15 @@ Rect CylindricalWarper::buildMaps(Size src_size, InputArray K, InputArray R, Out
             UMat uxmap = xmap.getUMat(), uymap = ymap.getUMat(), uk_rinv = k_rinv.getUMat(ACCESS_READ);
 
             k.args(ocl::KernelArg::WriteOnlyNoSize(uxmap), ocl::KernelArg::WriteOnly(uymap),
-                   ocl::KernelArg::PtrReadOnly(uk_rinv), dst_tl.x, dst_tl.y, projector_.scale);
+                   ocl::KernelArg::PtrReadOnly(uk_rinv), dst_tl.x, dst_tl.y, 1/projector_.scale,
+                   rowsPerWI);
 
-            size_t globalsize[2] = { dsize.width, dsize.height };
+            size_t globalsize[2] = { dsize.width, (dsize.height + rowsPerWI - 1) / rowsPerWI };
             if (k.run(2, globalsize, NULL, true))
+            {
+                CV_IMPL_ADD(CV_IMPL_OCL);
                 return Rect(dst_tl, dst_br);
+            }
         }
     }
 
